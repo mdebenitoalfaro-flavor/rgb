@@ -10,6 +10,7 @@
     #muestra { width: 120px; height: 120px; border-radius: 50%; margin: 20px auto; background: rgb(255,0,0); border: 2px solid #555; }
     input[type=range] { width: 90%; height: 40px; }
     #estado { font-weight: bold; color: #f55; }
+    #boton { font-size: 20px; padding: 14px 40px; margin-top: 15px; border: none; border-radius: 10px; color: #fff; background: #c33; }
   </style>
 </head>
 <body>
@@ -18,6 +19,7 @@
   <div id="muestra"></div>
   <input type="range" id="barra" min="0" max="100" value="0">
   <p id="texto">RGB: 255 0 0</p>
+  <button id="boton">Apagar</button>
 
   <script>
     // Debe ser EXACTAMENTE el mismo tema que en la placa
@@ -27,6 +29,7 @@
     const barra = document.getElementById("barra");
     const muestra = document.getElementById("muestra");
     const texto = document.getElementById("texto");
+    const boton = document.getElementById("boton");
 
     const cliente = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
@@ -42,15 +45,22 @@
       return [Math.round(r), Math.round(g), Math.round(b)];
     }
 
+    let encendido = true;
     let ultimoEnvio = 0;
     let pendiente = null;
 
     function enviar() {
       const [r, g, b] = color(Number(barra.value));
-      muestra.style.background = `rgb(${r},${g},${b})`;
-      texto.textContent = `RGB: ${r} ${g} ${b}`;
+      if (encendido) {
+        muestra.style.background = `rgb(${r},${g},${b})`;
+        texto.textContent = `RGB: ${r} ${g} ${b}`;
+      } else {
+        muestra.style.background = "#000";
+        texto.textContent = `Apagado (color elegido: ${r} ${g} ${b})`;
+      }
       if (cliente.connected) {
-        cliente.publish(TEMA, `${r} ${g} ${b}`, { retain: true });
+        const mensaje = encendido ? `${r} ${g} ${b}` : "0 0 0";
+        cliente.publish(TEMA, mensaje, { retain: true });
       }
       ultimoEnvio = Date.now();
     }
@@ -60,6 +70,14 @@
       const espera = 60 - (Date.now() - ultimoEnvio);
       if (espera <= 0) enviar();
       else pendiente = setTimeout(enviar, espera);
+    });
+
+    boton.addEventListener("click", () => {
+      clearTimeout(pendiente);
+      encendido = !encendido;
+      boton.textContent = encendido ? "Apagar" : "Encender";
+      boton.style.background = encendido ? "#c33" : "#3a3";
+      enviar();
     });
   </script>
 </body>
