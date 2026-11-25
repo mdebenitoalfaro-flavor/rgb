@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control RGB</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; background: #111; color: #eee; }
+    #muestra { width: 120px; height: 120px; border-radius: 50%; margin: 20px auto; background: rgb(255,0,0); border: 2px solid #555; }
+    input[type=range] { width: 90%; height: 40px; }
+    #estado { font-weight: bold; color: #f55; }
+  </style>
+</head>
+<body>
+  <h2>Control RGB</h2>
+  <p>Estado: <span id="estado">Conectando...</span></p>
+  <div id="muestra"></div>
+  <input type="range" id="barra" min="0" max="100" value="0">
+  <p id="texto">RGB: 255 0 0</p>
+
+  <script>
+    // Debe ser EXACTAMENTE el mismo tema que en la placa
+    const TEMA = "cambia_esto_x7k2/rgb";
+
+    const estado = document.getElementById("estado");
+    const barra = document.getElementById("barra");
+    const muestra = document.getElementById("muestra");
+    const texto = document.getElementById("texto");
+
+    const cliente = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+
+    cliente.on("connect", () => { estado.textContent = "Conectado"; estado.style.color = "#5f5"; });
+    cliente.on("close", () => { estado.textContent = "Desconectado"; estado.style.color = "#f55"; });
+
+    // Rojo -> verde (zona central corta) -> azul
+    function color(p) {
+      let r = 0, g = 0, b = 0;
+      if (p < 45) { const t = p / 45; r = 255 * (1 - t); g = 255 * t; }
+      else if (p <= 55) { g = 255; }
+      else { const t = (p - 55) / 45; g = 255 * (1 - t); b = 255 * t; }
+      return [Math.round(r), Math.round(g), Math.round(b)];
+    }
+
+    let ultimoEnvio = 0;
+    let pendiente = null;
+
+    function enviar() {
+      const [r, g, b] = color(Number(barra.value));
+      muestra.style.background = `rgb(${r},${g},${b})`;
+      texto.textContent = `RGB: ${r} ${g} ${b}`;
+      if (cliente.connected) {
+        cliente.publish(TEMA, `${r} ${g} ${b}`, { retain: true });
+      }
+      ultimoEnvio = Date.now();
+    }
+
+    barra.addEventListener("input", () => {
+      clearTimeout(pendiente);
+      const espera = 60 - (Date.now() - ultimoEnvio);
+      if (espera <= 0) enviar();
+      else pendiente = setTimeout(enviar, espera);
+    });
+  </script>
+</body>
+</html>
